@@ -11,12 +11,44 @@ Articulo de Referencia: [[paper](https://arxiv.org/abs/2201.12740)].
 |:--:|:--:|
 | *Figure 2. Frequency Enhanced Block (FEB)* | *Figure 3. Frequency Enhanced Attention (FEA)* |
 
-## Fundamentos teóricos y arquitectura del modelo
-- **Decomposición espectral**: separa la serie en componentes de baja frecuencia (tendencia) y alta frecuencia (estacionalidad) usando FFT o wavelets.  
-- **Bloques FEB / FEA**: realizan atención en el dominio de frecuencia seleccionando un número fijo de modos, lo que reduce la complejidad a O(N).  
-- **MOEDecomp**: “Mixture of Experts Decomposition” aplica filtros de media móvil de distintos anchos para extraer explícitamente patrones de tendencia de largo plazo.  
-- **Encoder–Decoder**: cada capa de encoder/decoder alterna FEB/FEA, bloques feed-forward y MOEDecomp, combinando las salidas de frecuencia y tendencia para modelar series largas.
 
+FEDformer introduce una nueva forma de combinar análisis en el dominio de la frecuencia con la arquitectura encoder–decoder del Transformer, logrando predicciones de series temporales de largo plazo con complejidad lineal.
+
+- **Descomposición espectral**  
+  La serie de tiempo de entrada se divide en dos componentes principales:
+  1. **Baja frecuencia (tendencia)**: capturada mediante transformadas (FFT o wavelets) y bloque MOEDecomp.  
+  2. **Alta frecuencia (estacionalidad / ruido)**: procesada por bloques de atención en frecuencia (FEB/FEA).
+
+- **Bloques Frequency Enhanced Block (FEB) y Frequency Enhanced Attention (FEA)**  
+  - Reemplazan la auto­atención clásica por un mecanismo que:  
+    1. Transforma la señal al dominio de frecuencia.  
+    2. Selecciona un conjunto fijo de “modos” (componentes frecuenciales) de tamaño reducido.  
+    3. Procesa solo esos modos para reducir la complejidad de O(N²) a **O(N)**.  
+  - FEB opera como self-attention en frecuencia; FEA aplica atención cruzada en frecuencia entre encoder y decoder.
+
+- **MOEDecomp (Mixture of Experts Decomposition)**  
+  - Extrae explícitamente la **tendencia** mediante una mezcla ponderada de filtros de media móvil de distintos tamaños.  
+  - Cada capa aplica MOEDecomp tras los bloques FEB/FEA y feed-forward, separando el componente de tendencia y dejando el residual estacional para la siguiente capa.
+
+- **Arquitectura Encoder–Decoder**  
+  1. **Encoder**  
+     - Cada capa:  
+       - FEB → LayerNorm → Feed-Forward → LayerNorm → MOEDecomp (tendencia)  
+     - Produce representaciones en frecuencia y extrae la tendencia iterativamente.  
+  2. **Decoder**  
+     - Cada capa:  
+       - FEB (estacionalidad) → FEA (atención cruzada con encoder) → Feed-Forward → MOEDecomp → combinación de tendencias.  
+     - Genera predicciones estacionales y de tendencia que luego se recombinan.
+
+- **Variantes de frecuencia**  
+  - **Fourier (–Fourier)**: usa transformada discreta de Fourier y selección aleatoria de modos.  
+  - **Wavelet (–Wavelets)**: emplea transformadas wavelet (p. ej. polinomios de Legendre) para representar mejor ciertas series.
+
+- **Complejidad y escalabilidad**  
+  - La selección de un número fijo de modos garantizado en FEB/FEA y la descomposición por MOEDecomp permiten que FEDformer procese secuencias de gran longitud con **O(N)** de tiempo y memoria.  
+  - Esto lo hace adecuado para series temporales muy largas donde los Transformers clásicos resultan prohibitivos.
+
+En conjunto, estos componentes conforman una arquitectura que equilibra eficiencia, interpretación de componentes (tendencia vs. estacionalidad) y capacidad de captura de patrones de largo plazo.  
 ## Funcionamiento interno y mecanismo de predicción
 - **Entrada**: vector de embedding de la serie de tiempo (posicional + características).  
 - **Descomposición**: cada capa extrae componentes de frecuencia y tendencia de forma iterativa.  
